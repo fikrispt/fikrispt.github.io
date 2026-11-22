@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Demo — Config Profile Card</title>
+  <meta name="robots" content="noindex" />
+  <link rel="icon" href="assets/thumb/thumb.jpg" />
+  <link rel="stylesheet" href="css/card.css" />
+  <link rel="stylesheet" href="css/demo.css" />
+</head>
+<body class="demo">
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <strong>Profile Card</strong><span>Config &amp; Live Preview</span>
+      </div>
+      <label class="switch" title="Klik teks / gambar langsung di preview untuk mengubahnya">
+        <input type="checkbox" id="editToggle" />
+        <span class="track"><span class="thumb"></span></span>
+        <span class="switch-label">Edit via klik</span>
+      </label>
+      <a class="btn ghost" id="openIndex" href="index.html?draft=1" target="_blank" rel="noopener">Buka index ↗</a>
+    </header>
+
+    <main class="stage-wrap">
+      <div class="stage-bar">
+        <span class="hint" id="stageHint">Live preview</span>
+        <div class="seg" role="group" aria-label="Lebar preview">
+          <button type="button" data-w="0" class="on">Auto</button>
+          <button type="button" data-w="375">375</button>
+          <button type="button" data-w="320">320</button>
+          <button type="button" data-w="280">280</button>
+        </div>
+      </div>
+      <div class="stage-shell" id="stageShell">
+        <!-- Background glassmorphism -->
+        <div class="glass-bg" aria-hidden="true">
+          <span class="bg-img"></span><span class="orb o1"></span><span class="orb o2"></span><span class="orb o3"></span>
+        </div>
+        <div class="stage" id="stage">
+          <div class="stage-inner" id="stageInner">
+            <article class="card" id="card" aria-label="Profile card"></article>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <aside class="panel" id="panel">
+      <div class="actions">
+        <button class="btn primary" id="btnZip" type="button">Export ZIP</button>
+        <button class="btn" id="btnJs" type="button">config.js</button>
+        <button class="btn" id="btnCopy" type="button">Copy JSON</button>
+        <button class="btn" id="btnImport" type="button">Import</button>
+        <button class="btn danger" id="btnReset" type="button">Reset</button>
+        <input type="file" id="importFile" accept=".json,.js,application/json" hidden />
+        <p class="status" id="status">Perubahan otomatis tersimpan sebagai draft di browser ini.</p>
+      </div>
+      <div id="form"></div>
+    </aside>
+  </div>
+
+  <div class="edit-tag" id="editTag" hidden></div>
+  <div class="pop" id="pop" hidden></div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <input type="file" id="imgPicker" accept="image/*" hidden />
+
+  <script src="js/config.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/demo.js"></script>
+</body>
+</html>
