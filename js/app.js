@@ -168,6 +168,9 @@
     valid.forEach(function (k) { if (out.indexOf(k) === -1) out.push(k); });
     return out;
   }
+  var LABEL_ICONS = [["none", "Tanpa ikon"], ["custom", "Ikon sendiri (upload)"], ["link", "Rantai (link)"], ["star", "Bintang"]].concat(
+    [["x", "X (Twitter)"], ["instagram", "Instagram"], ["linkedin", "LinkedIn"], ["github", "GitHub"], ["facebook", "Facebook"],
+     ["youtube", "YouTube"], ["tiktok", "TikTok"], ["telegram", "Telegram"], ["whatsapp", "WhatsApp"], ["email", "Email"], ["website", "Website"]]);
   var LINK_ICONS = [["none", "Tanpa ikon"], ["link", "Rantai (link)"], ["star", "Bintang"]].concat(
     SOCIAL_TYPES.filter(function (t) { return t[0] !== "custom"; }));
 
@@ -389,12 +392,26 @@
     clearTimeout(tipTimer);
     Array.prototype.forEach.call(document.querySelectorAll(".verified-tip.open"), function (t) {
       t.classList.remove("open");
-      var b = t.previousElementSibling;
-      if (b && b.classList.contains("verified-btn")) b.setAttribute("aria-expanded", "false");
+      var b = t.parentNode && t.parentNode.querySelector("[aria-expanded]");
+      if (b) b.setAttribute("aria-expanded", "false");
+    });
+  }
+  function bindTip(btn, tip) {
+    btn.addEventListener("click", function () {
+      var open = !tip.classList.contains("open");
+      closeTips();
+      if (open) {
+        tip.classList.add("open");
+        btn.setAttribute("aria-expanded", "true");
+        tipTimer = setTimeout(closeTips, 2800);
+      }
+    });
+    btn.addEventListener("keydown", function (e) {
+      if (btn.tagName !== "BUTTON" && (e.key === "Enter" || e.key === " ") && e.target === btn) { e.preventDefault(); btn.click(); }
     });
   }
   document.addEventListener("click", function (e) {
-    if (!e.target.closest || !e.target.closest(".verified-btn")) closeTips();
+    if (!e.target.closest || !e.target.closest(".verified-btn, .tip-trigger")) closeTips();
   });
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeTips(); });
 
@@ -419,6 +436,91 @@
     w.className = "ico";
     w.innerHTML = iconSvg(type);
     return w;
+  }
+
+  /* ---------- isi More Info: section -> baris / gambar / teks ---------- */
+  function buildSection(sec, s) {
+    var cols = Math.max(1, Math.min(3, parseInt(sec.columns, 10) || 1));
+    var wrap = el("div", { class: "msec", "data-effect": sec.effect || "none", "data-sort": "section",
+      "data-sort-path": "cta.sections", "data-sort-idx": s, "data-sort-label": "Section " + (s + 1) });
+    wrap.style.setProperty("--cols", cols);
+    wrap.style.setProperty("--sgap", (sec.gap == null ? 10 : sec.gap) + "px");
+    if (sec.showTitle !== false && sec.title) {
+      wrap.appendChild(el("h3", withAttrs({ class: "msec-title", "data-align": sec.titleAlign || "center", text: sec.title },
+        editAttrs("cta.sections." + s + ".title", "text", "Judul section"))));
+    }
+    var box = el("div", { class: "msec-items" });
+    (sec.items || []).forEach(function (it, j) {
+      if (!it) return;
+      var n = buildItem(it, s, j);
+      n.style.setProperty("--i", j);
+      box.appendChild(n);
+    });
+    wrap.appendChild(box);
+    return wrap;
+  }
+
+  function buildItem(it, s, j) {
+    var base = "cta.sections." + s + ".items." + j;
+    var sortAttrs = { "data-sort": "row", "data-sort-path": "cta.sections." + s + ".items", "data-sort-idx": j };
+    var type = it.type === "image" || it.type === "text" ? it.type : "row";
+
+    if (type === "image") {
+      var box = el("div", withAttrs({ class: "mimg", "data-align": it.align || "center", "data-sort-label": "Gambar" }, sortAttrs));
+      box.style.setProperty("--ih", (it.height || 120) + "px");
+      box.style.setProperty("--ir", (it.radius == null ? 14 : it.radius) + "px");
+      if (it.span !== "1") box.style.gridColumn = "1 / -1";
+      var im = el("div", withAttrs({ class: "mimg-pic", "data-fit": it.fit || "cover" }, editAttrs(base + ".src", "image", "Gambar")));
+      if (it.src) im.appendChild(el("img", { src: it.src, alt: it.caption || "", draggable: "false" }));
+      else im.textContent = "Klik untuk memilih gambar";
+      box.appendChild(im);
+      if (it.caption) box.appendChild(el("div", withAttrs({ class: "mimg-cap", text: it.caption }, editAttrs(base + ".caption", "text", "Keterangan gambar"))));
+      return box;
+    }
+
+    if (type === "text") {
+      var t = el("p", withAttrs({ class: "mtext", "data-align": it.align || "left", text: it.text, "data-multiline": "1", "data-sort-label": "Teks" },
+        editAttrs(base + ".text", "text", "Teks")));
+      Object.keys(sortAttrs).forEach(function (k) { t.setAttribute(k, sortAttrs[k]); });
+      if (it.span === "1") t.style.gridColumn = "auto"; else t.style.gridColumn = "1 / -1";
+      return t;
+    }
+
+    var tone = ["soft", "dark", "none", "glass", "custom"].indexOf(it.tone) !== -1 ? it.tone : "soft";
+    var row = el("div", withAttrs({ class: "mrow", "data-tone": tone, "data-effect": it.effect || "none", "data-sort-label": "Baris" }, sortAttrs));
+    if (it.span === "all") row.style.gridColumn = "1 / -1";
+    if (tone === "custom") row.style.background = paint(it.customMode === "gradient" ? "gradient" : "solid", it.customColor1, it.customColor2, 135);
+    if (it.label) row.appendChild(el("span", withAttrs({ class: "k", text: it.label }, editAttrs(base + ".label", "text", "Label"))));
+    var right = el("div", { class: "mright", "data-align": it.iconAlign || "right" });
+    if (it.value) right.appendChild(el("span", withAttrs({ class: "v", text: it.value }, editAttrs(base + ".value", "text", "Isi"))));
+    var icons = (it.icons || []).map(function (ic, k) { return { ic: ic, k: k }; }).filter(function (x) { return x.ic && x.ic.src; });
+    if (icons.length) {
+      var wrapI = el("div", { class: "micons", "data-shape": it.iconShape || "rounded" });
+      wrapI.style.setProperty("--isz", (it.iconSize || 28) + "px");
+      var max = it.maxIcons > 0 ? it.maxIcons : icons.length;
+      icons.forEach(function (x, n) {
+        var attrs = { class: "mico" + (n >= max ? " extra" : ""), title: x.ic.name || null };
+        if (x.ic.url) attrs.href = safeUrl(x.ic.url);
+        var node = el(x.ic.url ? "a" : "span", withAttrs(attrs, editAttrs(base + ".icons." + x.k + ".src", "image", "Ikon " + (x.k + 1))));
+        if (x.ic.url) linkAttrs(node);
+        node.appendChild(el("img", { src: x.ic.src, alt: x.ic.name || "", draggable: "false" }));
+        wrapI.appendChild(node);
+      });
+      var extra = icons.length - max;
+      if (extra > 0) {
+        var badge = el("button", { class: "mmore", type: "button", "aria-expanded": "false", title: "Tampilkan semua" });
+        badge.textContent = extra + "+";
+        badge.addEventListener("click", function () {
+          var ex = wrapI.classList.toggle("expanded");
+          badge.textContent = ex ? "−" : extra + "+";
+          badge.setAttribute("aria-expanded", ex ? "true" : "false");
+        });
+        wrapI.appendChild(badge);
+      }
+      right.appendChild(wrapI);
+    }
+    row.appendChild(right);
+    return row;
   }
 
   function render(root, cfg) {
@@ -546,27 +648,41 @@
         editAttrs(p.verifiedStyle === "white" ? "assets.verifiedWhite" : "assets.verified", "image", "Ikon verified"))));
       var tip = el("span", withAttrs({ class: "verified-tip", role: "status", text: vText },
         editAttrs("profile.verifiedText", "text", "Teks yang muncul saat verified diklik")));
-      vbtn.addEventListener("click", function () {
-        var open = !tip.classList.contains("open");
-        closeTips();
-        if (open) {
-          tip.classList.add("open");
-          vbtn.setAttribute("aria-expanded", "true");
-          tipTimer = setTimeout(closeTips, 2800);
-        }
-      });
+      bindTip(vbtn, tip);
       vNode = el("span", { class: "verified-wrap" }, [vbtn, tip]);
+      if (p.verifiedOffsetY) vNode.style.transform = "translateY(" + p.verifiedOffsetY + "px)";
     }
     var labelNodes = [];
     if (lb.show !== false) {
       (lb.items || []).forEach(function (l, i) {
-        if (!l || !l.text) return;
-        var pill = el("span", { class: "label-pill" });
-        pill.style.background = paint(l.mode, l.color1, l.color2, 135);
-        pill.style.color = l.textColor || "#ffffff";
-        if (l.icon && l.icon !== "none") pill.appendChild(iconNode(l.icon, l));
-        pill.appendChild(el("span", withAttrs({ text: l.text }, editAttrs("profile.labels.items." + i + ".text", "text", "Label " + (i + 1)))));
-        labelNodes.push(pill);
+        if (!l) return;
+        var hasIcon = l.icon && l.icon !== "none" && (l.icon !== "custom" || l.iconSrc);
+        if (!l.text && !hasIcon) return;
+        var base = "profile.labels.items." + i;
+        var iconOnly = l.style === "icon";
+        var pill = el("span", withAttrs({ class: "label-pill" + (iconOnly ? " icon-only" : "") }, panelAttrs(base + ".text", "Label " + (i + 1))));
+        if (iconOnly) {
+          pill.style.setProperty("--lsz", (l.size || 20) + "px");
+          if (l.textColor) pill.style.color = l.textColor;
+        } else {
+          pill.style.background = paint(l.mode, l.color1, l.color2, 135);
+          pill.style.color = l.textColor || "#ffffff";
+          if (l.size) pill.style.setProperty("--lsz", l.size + "px");
+        }
+        if (hasIcon) pill.appendChild(l.icon === "custom" ? customIcon({ icon: l.iconSrc, tint: l.tint }) : iconNode(l.icon));
+        if (l.text) pill.appendChild(el("span", withAttrs({ text: l.text }, editAttrs(base + ".text", "text", "Label " + (i + 1)))));
+        var lw = el("span", { class: "label-wrap" }, [pill]);
+        if (l.tip) {
+          var ltip = el("span", withAttrs({ class: "verified-tip", role: "status", text: l.tip }, editAttrs(base + ".tip", "text", "Teks saat label diklik")));
+          pill.classList.add("tip-trigger");
+          pill.setAttribute("role", "button");
+          pill.setAttribute("tabindex", "0");
+          pill.setAttribute("aria-expanded", "false");
+          bindTip(pill, ltip);
+          lw.appendChild(ltip);
+        }
+        if (l.offsetY) lw.style.transform = "translateY(" + l.offsetY + "px)";
+        labelNodes.push(lw);
       });
     }
     (p.verifiedPos === "after" ? labelNodes.concat([vNode]) : [vNode].concat(labelNodes)).forEach(function (n) { if (n) name.appendChild(n); });
@@ -616,7 +732,16 @@
 
     var blocks = { name: name, handle: handle, desc: desc, stats: stats, links: linksBox, more: null };
 
-    /* ===== More Info ===== */
+    /* ===== copyright ===== */
+    var cp = cfg.copyright || {};
+    var cpNode = null;
+    if (cp.show !== false && cp.text) {
+      cpNode = el("div", withAttrs({ class: "copyright", "data-align": cp.align || "center", text: cp.text }, editAttrs("copyright.text", "text", "Teks copyright")));
+      cpNode.style.fontSize = (cp.size || 12) + "px";
+    }
+    var cpInside = cpNode && cp.placement === "inside";
+
+    /* ===== More Info: tombol + section yang memanjang ke bawah ===== */
     var more = null;
     if (cta.show !== false) {
       var isOpen = runtime.open === null ? !!cta.defaultOpen : !!runtime.open;
@@ -639,22 +764,14 @@
       trigger.appendChild(chev);
 
       var body = el("div", { class: "more-body" });
-      if (cta.about) body.appendChild(el("p", withAttrs({ class: "more-about", text: cta.about, "data-multiline": "1" }, editAttrs("cta.about", "text", "Teks tambahan"))));
-      var rows = cta.items || [];
-      if (rows.length) {
-        body.appendChild(el("ul", { class: "more-list" }, rows.map(function (r, i) {
-          return el("li", {}, [
-            el("span", withAttrs({ class: "k", text: r.label }, editAttrs("cta.items." + i + ".label", "text", "Label info"))),
-            el("span", withAttrs({ class: "v", text: r.value }, editAttrs("cta.items." + i + ".value", "text", "Isi info")))
-          ]);
-        })));
-      }
+      (Array.isArray(cta.sections) ? cta.sections : []).forEach(function (sec, si) { if (sec) body.appendChild(buildSection(sec, si)); });
       if (cta.actionShow !== false && cta.actionText) {
         var act = el("a", { class: "more-action", href: safeUrl(cta.actionUrl) });
         act.appendChild(el("span", withAttrs({ text: cta.actionText }, editAttrs("cta.actionText", "text", "Teks tombol aksi"))));
         linkAttrs(act);
         body.appendChild(act);
       }
+      if (cpInside) body.appendChild(cpNode);
 
       var panel = el("div", { class: "more", id: panelId }, [el("div", { class: "more-inner" }, [body])]);
       more = el("div", { class: "more-wrap" + (isOpen ? " open" : "") }, [trigger, panel]);
@@ -689,7 +806,7 @@
       n.setAttribute("data-block-label", labelOf[k]);
       content.appendChild(n);
     });
-    [bannerBox, head, content].forEach(function (n) { if (n) root.appendChild(n); });
+    [bannerBox, head, content, cpNode && !cpInside ? cpNode : null].forEach(function (n) { if (n) root.appendChild(n); });
     updateThemeButtons();
   }
 
@@ -707,7 +824,7 @@
 
   window.ProfileCard = {
     DRAFT_KEY: DRAFT_KEY,
-    SOCIAL_TYPES: SOCIAL_TYPES, LINK_ICONS: LINK_ICONS, BLOCKS: BLOCKS, normalizeOrder: normalizeOrder, FONTS: FONTS,
+    SOCIAL_TYPES: SOCIAL_TYPES, LINK_ICONS: LINK_ICONS, LABEL_ICONS: LABEL_ICONS, BLOCKS: BLOCKS, normalizeOrder: normalizeOrder, FONTS: FONTS,
     runtime: runtime,
     clone: clone, merge: merge, getPath: getPath, setPath: setPath,
     defaults: defaults, loadDraft: loadDraft, saveDraft: saveDraft, clearDraft: clearDraft,

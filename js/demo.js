@@ -1,5 +1,5 @@
 /* ==========================================================
-   demo.html — editor config + live preview + edit via klik
+   demo.html — Studio: editor config + live preview + edit via klik
    Bergantung pada js/config.js dan js/app.js
    ========================================================== */
 (function () {
@@ -20,7 +20,10 @@
   var cardEl = $("#card");
   var formEl = $("#form");
   var statusEl = $("#status");
+  var scrollEl = $("#panelScroll");
   var editOn = false;
+
+  var ui = { tab: "profil", palette: cfg.theme && cfg.theme.mode === "light" ? "light" : "dark" };
 
   /* Lokasi standar file saat export ZIP (sesuai struktur folder) */
   var ASSET_FILES = {
@@ -31,77 +34,114 @@
     verifiedWhite: { path: "assets/icon/verified-white.png", type: "png",  max: 512 },
     background:    { path: "assets/background/background.jpg", type: "jpeg", max: 1920 }
   };
-  var ICON_SPEC = { type: "png", max: 128 };
+  var ICON_SPEC = { type: "png", max: 160 };
+  var PHOTO_SPEC = { type: "png", max: 900 };
 
   var IMAGE_FIELDS = [
-    { key: "profile",       label: "Foto profil",      hint: "Disarankan persegi, min. 400px. Bentuk & ring diatur di bagian Foto profil & ring." },
-    { key: "banner",        label: "Banner",           hint: "Dipakai bila Mode banner = Gambar. Disarankan 1200×400." },
+    { key: "profile",       label: "Foto profil",      hint: "Disarankan persegi, min. 400px. Bentuk & ring diatur di tab Profil." },
+    { key: "banner",        label: "Banner",           hint: "Dipakai bila Isi banner = Gambar. Disarankan 1200×400." },
     { key: "thumb",         label: "Thumbnail",        hint: "Favicon tab & preview link (og:image). Disarankan 512×512." },
     { key: "verified",      label: "Ikon verified (biru)",  hint: "PNG transparan." },
     { key: "verifiedWhite", label: "Ikon verified (putih)", hint: "PNG transparan, untuk kartu gelap." },
     { key: "background",    label: "Background halaman", hint: "Dipakai bila Jenis background = Gambar upload." }
   ];
 
-  /* ---------- skema form ---------- */
-  function paletteFields(mode) {
-    var b = "theme." + mode + ".";
-    return [
-      { path: b + "pageBg", label: "Background halaman", type: "color" },
-      { path: b + "orb1", label: "Background glass — warna 1", type: "color" },
-      { path: b + "orb2", label: "Background glass — warna 2", type: "color" },
-      { path: b + "orb3", label: "Background glass — warna 3", type: "color" },
-      { path: b + "cardBg", label: "Warna kartu", type: "color" },
-      { path: b + "cardOpacity", label: "Transparansi kartu (kaca)", type: "range", min: 0.05, max: 1, step: 0.05 },
-      { path: b + "cardBorder", label: "Warna garis tepi kartu", type: "color" },
-      { path: b + "cardBorderOpacity", label: "Opasitas garis tepi", type: "range", min: 0, max: 1, step: 0.05 },
-      { path: b + "textColor", label: "Warna teks utama", type: "color" },
-      { path: b + "mutedColor", label: "Warna teks kecil", type: "color" },
-      { path: b + "linkColor", label: "Warna link (otomatis)", type: "color" },
-      { path: b + "followBg", label: "Tombol Follow — background", type: "color" },
-      { path: b + "followText", label: "Tombol Follow — teks", type: "color" }
-    ];
-  }
+  /* ---------- tab menu ---------- */
+  var TABS = [
+    { id: "profil", label: "Profil", icon: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>' },
+    { id: "banner", label: "Banner", icon: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>' },
+    { id: "konten", label: "Konten", icon: '<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>' },
+    { id: "tema",   label: "Tema",   icon: '<path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>' },
+    { id: "aset",   label: "Aset",   icon: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>' }
+  ];
 
+  /* ---------- skema form ---------- */
   function get(path) { return PC.getPath(cfg, path); }
   function isGrad(path) { return function () { return get(path) === "gradient"; }; }
   function isOneOf(path, arr) { return function () { return arr.indexOf(get(path)) !== -1; }; }
-
+  function isType(base, arr) { return function () { return arr.indexOf(get(base + "type") || "row") !== -1; }; }
   var COLOR_MODES = [["solid", "Solid (1 warna)"], ["gradient", "Gradient (2 warna)"]];
+  var ALIGN3 = [["left", "Kiri"], ["center", "Tengah"], ["right", "Kanan"]];
 
-  /* sesuai urutan tampil di kartu: atas → bawah */
+  function paletteFields(mode) {
+    var b = "theme." + mode + ".";
+    var w = function () { return ui.palette === mode; };
+    return [
+      { path: b + "pageBg", label: "Background halaman", type: "color", when: w },
+      { path: b + "orb1", label: "Background glass — warna 1", type: "color", when: w },
+      { path: b + "orb2", label: "Background glass — warna 2", type: "color", when: w },
+      { path: b + "orb3", label: "Background glass — warna 3", type: "color", when: w },
+      { path: b + "cardBg", label: "Warna kartu", type: "color", when: w },
+      { path: b + "cardOpacity", label: "Transparansi kartu (kaca)", type: "range", min: 0.05, max: 1, step: 0.05, when: w },
+      { path: b + "cardBorder", label: "Warna garis tepi kartu", type: "color", when: w },
+      { path: b + "cardBorderOpacity", label: "Opasitas garis tepi", type: "range", min: 0, max: 1, step: 0.05, when: w },
+      { path: b + "textColor", label: "Warna teks utama", type: "color", when: w },
+      { path: b + "mutedColor", label: "Warna teks kecil", type: "color", when: w },
+      { path: b + "linkColor", label: "Warna link (otomatis)", type: "color", when: w },
+      { path: b + "followBg", label: "Tombol Follow — background", type: "color", when: w },
+      { path: b + "followText", label: "Tombol Follow — teks", type: "color", when: w }
+    ];
+  }
+
+  var ROW_BLANK = function () {
+    return { type: "row", label: "Label", value: "Isi", tone: "soft", customMode: "solid", customColor1: "#1d1b3a", customColor2: "#3a2f7a",
+      iconSize: 28, iconShape: "rounded", iconAlign: "right", maxIcons: 0, effect: "none", icons: [], span: "1",
+      src: "", height: 120, fit: "cover", radius: 14, caption: "", text: "Teks", align: "left" };
+  };
+  var ITEM_TITLE = function (it, i) {
+    var t = it.type === "image" ? "Gambar" : it.type === "text" ? "Teks" : "Baris";
+    var d = it.label || (it.text ? String(it.text).slice(0, 18) : "");
+    return t + " " + (i + 1) + (d ? " · " + d : "");
+  };
+
   var SECTIONS = [
-    { title: "Profil", open: true, fields: [
+    /* ===== PROFIL ===== */
+    { tab: "profil", title: "Profil", fields: [
       { path: "profile.name", label: "Nama", type: "text" },
       { path: "profile.username", label: "Username", type: "text", hint: "Contoh: @namakamu" },
       { path: "profile.description", label: "Bio", type: "textarea",
-        hint: "Tekan Enter untuk baris baru. Beri 1 baris kosong untuk membuat paragraf baru." },
+        hint: "Tekan Enter untuk baris baru. Beri 1 baris kosong untuk membuat paragraf baru." }
     ]},
-    { title: "Verified & label di samping nama", fields: [
+    { tab: "profil", title: "Verified & label di samping nama", fields: [
       { path: "profile.verified", label: "Tampilkan ikon verified", type: "check" },
       { path: "profile.verifiedStyle", label: "Gaya ikon verified", type: "select",
         options: [["default", "Biru (default)"], ["white", "Putih"]] },
       { path: "profile.verifiedSize", label: "Ukuran ikon verified (px)", type: "range", min: 12, max: 60, step: 1 },
+      { path: "profile.verifiedOffsetY", label: "Posisi ikon verified (↑ naik / ↓ turun, px)", type: "range", min: -30, max: 30, step: 1,
+        hint: "Geser ikon verified ke atas (negatif) atau ke bawah (positif)." },
       { path: "profile.verifiedText", label: "Teks yang muncul di atas ikon saat diklik", type: "text",
         hint: "Di mode edit: arahkan kursor ke nama lalu klik teksnya, atau klik ikon verified." },
       { path: "profile.badgeAlign", label: "Perataan ikon & label di samping nama", type: "choice", cols: 2, options: [
         ["center", "Tengah (sejajar nama)"], ["top", "Atas"], ["bottom", "Bawah"], ["baseline", "Garis dasar teks"]] },
       { path: "profile.verifiedPos", label: "Urutan ikon verified", type: "select",
         options: [["before", "Sebelum label"], ["after", "Sesudah label"]] },
-      { path: "profile.labels.show", label: "Tampilkan label", type: "check" }
+      { path: "profile.labels.show", label: "Tampilkan label / ikon tambahan", type: "check" }
     ], list: {
-      path: "profile.labels.items", max: 3, itemName: "Label",
-      blank: function () { return { text: "Freelancer", icon: "none", mode: "gradient", color1: "#7c5cff", color2: "#4f8bff", textColor: "#ffffff" }; },
-      fields: function (b) { return [
-        { path: b + "text", label: "Teks label", type: "text" },
-        { path: b + "icon", label: "Ikon", type: "select", options: PC.LINK_ICONS },
-        { path: b + "mode", label: "Warna label", type: "select", options: COLOR_MODES },
-        { path: b + "color1", label: "Warna 1", type: "color" },
-        { path: b + "color2", label: "Warna 2", type: "color", when: isGrad(b + "mode") },
-        { path: b + "textColor", label: "Warna teks", type: "color" }
-      ]; }
+      path: "profile.labels.items", max: 5, itemName: "Label",
+      title: function (it, i) { return "Label " + (i + 1) + (it.text ? " · " + it.text : ""); },
+      blank: function () { return { text: "Freelancer", style: "pill", icon: "none", iconSrc: "", tint: true, size: 16,
+        mode: "gradient", color1: "#7c5cff", color2: "#4f8bff", textColor: "#ffffff", offsetY: 0, tip: "Tersedia untuk proyek baru" }; },
+      fields: function (b) {
+        var custom = function () { return get(b + "icon") === "custom"; };
+        var pill = function () { return get(b + "style") !== "icon"; };
+        return [
+          { path: b + "text", label: "Teks label (kosongkan bila hanya ikon)", type: "text" },
+          { path: b + "style", label: "Tampilan", type: "choice", cols: 2, options: [["pill", "Pill + latar"], ["icon", "Hanya ikon"]] },
+          { path: b + "icon", label: "Ikon", type: "select", options: PC.LABEL_ICONS },
+          { type: "image", path: b + "iconSrc", label: "Upload ikon sendiri", icon: true, when: custom,
+            hint: "PNG/SVG/JPG. Atau seret file ke kotak ini." },
+          { path: b + "tint", label: "Warnai ikon mengikuti warna teks (matikan = warna asli)", type: "check", when: custom },
+          { path: b + "size", label: "Ukuran ikon (px)", type: "range", min: 8, max: 48, step: 1 },
+          { path: b + "mode", label: "Warna latar", type: "select", options: COLOR_MODES, when: pill },
+          { path: b + "color1", label: "Warna latar 1", type: "color", when: pill },
+          { path: b + "color2", label: "Warna latar 2", type: "color", when: function () { return pill() && get(b + "mode") === "gradient"; } },
+          { path: b + "textColor", label: "Warna teks / ikon", type: "color" },
+          { path: b + "offsetY", label: "Posisi (↑ naik / ↓ turun, px)", type: "range", min: -20, max: 20, step: 1 },
+          { path: b + "tip", label: "Teks yang muncul saat diklik", type: "text", hint: "Kosongkan bila tidak ingin ada teks." }
+        ];
+      }
     }},
-    { title: "Susunan blok (drag & drop)", custom: "order" },
-    { title: "Foto profil & ring", fields: [
+    { tab: "profil", title: "Foto profil & ring", fields: [
       { path: "theme.avatarRadius", label: "Bentuk foto profil (kotak → bulat)", type: "range", min: 0, max: 50, step: 1,
         presets: [["Kotak", 0], ["Tumpul", 18], ["Bulat", 50]], suffix: "%" },
       { path: "theme.avatarSize", label: "Ukuran foto profil (px)", type: "range", min: 56, max: 150, step: 2 },
@@ -114,7 +154,9 @@
       { path: "avatar.ring.width", label: "Tebal garis ring (px)", type: "range", min: 1, max: 12, step: 1, when: function () { return get("avatar.ring.show"); } },
       { path: "avatar.ring.gap", label: "Jarak ring ke foto (px)", type: "range", min: 0, max: 16, step: 1, when: function () { return get("avatar.ring.show"); } }
     ]},
-    { title: "Banner", fields: [
+
+    /* ===== BANNER ===== */
+    { tab: "banner", title: "Banner", fields: [
       { path: "theme.bannerMode", label: "Isi banner", type: "select",
         options: [["image", "Gambar"], ["gradient", "Gradient"], ["solid", "Satu warna"]] },
       { path: "theme.bannerColor1", label: "Warna 1", type: "color", when: function () { return get("theme.bannerMode") !== "image"; } },
@@ -123,52 +165,41 @@
       { path: "theme.bannerAnimate", label: "Animasi gradient", type: "check", when: isGrad("theme.bannerMode") },
       { path: "theme.bannerSpeed", label: "Kecepatan (detik / siklus)", type: "range", min: 1, max: 20, step: 1, when: isGrad("theme.bannerMode") },
       { path: "theme.bannerHeight", label: "Tinggi banner (px)", type: "range", min: 100, max: 320, step: 2 },
-      { path: "theme.bannerInset", label: "Jarak banner ke tepi kartu (px)", type: "range", min: 0, max: 20, step: 1,
-        hint: "0 = banner penuh sampai tepi kartu." },
+      { path: "theme.bannerInset", label: "Jarak banner ke tepi kartu (px)", type: "range", min: 0, max: 20, step: 1, hint: "0 = banner penuh sampai tepi kartu." },
       { path: "theme.bannerRadiusMode", label: "Bentuk sudut banner", type: "select", options: [
-        ["all", "Rounded 4 sisi"],
-        ["bottom", "Rounded 2 sisi bawah saja"],
-        ["top", "Rounded 2 sisi atas saja"],
-        ["match", "Ikut bentuk card luar (atas ikut lengkung card)"],
-        ["square", "Kotak (tanpa rounded)"],
-        ["custom", "Bebas: atur tiap sudut"]
-      ]},
-      { path: "theme.bannerRadius", label: "Radius sudut (px)", type: "range", min: 0, max: 60, step: 1,
-        when: isOneOf("theme.bannerRadiusMode", ["all", "bottom", "top"]) },
+        ["all", "Rounded 4 sisi"], ["bottom", "Rounded 2 sisi bawah saja"], ["top", "Rounded 2 sisi atas saja"],
+        ["match", "Ikut bentuk card luar (atas ikut lengkung card)"], ["square", "Kotak (tanpa rounded)"], ["custom", "Bebas: atur tiap sudut"]] },
+      { path: "theme.bannerRadius", label: "Radius sudut (px)", type: "range", min: 0, max: 60, step: 1, when: isOneOf("theme.bannerRadiusMode", ["all", "bottom", "top"]) },
       { path: "theme.bannerRadiusTL", label: "Kiri atas (px)", type: "range", min: 0, max: 60, step: 1, when: isOneOf("theme.bannerRadiusMode", ["custom"]) },
       { path: "theme.bannerRadiusTR", label: "Kanan atas (px)", type: "range", min: 0, max: 60, step: 1, when: isOneOf("theme.bannerRadiusMode", ["custom"]) },
       { path: "theme.bannerRadiusBR", label: "Kanan bawah (px)", type: "range", min: 0, max: 60, step: 1, when: isOneOf("theme.bannerRadiusMode", ["custom"]) },
-      { path: "theme.bannerRadiusBL", label: "Kiri bawah (px)", type: "range", min: 0, max: 60, step: 1, when: isOneOf("theme.bannerRadiusMode", ["custom"]) }
+      { path: "theme.bannerRadiusBL", label: "Kiri bawah (px)", type: "range", min: 0, max: 60, step: 1, when: isOneOf("theme.bannerRadiusMode", ["custom"]) },
+      { path: "bookmark.show", label: "Tampilkan tombol simpan (bookmark)", type: "check" }
     ]},
-    { title: "Media sosial (kanan bawah banner)", fields: [
+    { tab: "banner", title: "Media sosial", fields: [
       { path: "socials.show", label: "Tampilkan ikon media sosial", type: "check" },
-      { path: "socials.style", label: "Gaya ikon", type: "select",
-        options: [["plain", "Polos"], ["glass", "Dalam kapsul kaca"]] },
+      { path: "socials.style", label: "Gaya ikon", type: "select", options: [["plain", "Polos"], ["glass", "Dalam kapsul kaca"]] },
       { path: "socials.size", label: "Ukuran ikon (px)", type: "range", min: 12, max: 44, step: 1 },
       { path: "socials.pos", label: "Template posisi", type: "choice", cols: 2, options: [
-        ["bottom-right", "Kanan bawah"], ["bottom-center", "Tengah bawah"],
-        ["after-avatar", "Di samping foto profil"], ["top-center", "Tengah atas"],
-        ["center", "Tengah banner"], ["right-column", "Kolom kanan"],
-        ["left-column", "Kolom kiri"], ["custom", "Bebas (hasil seret)"]],
+        ["bottom-right", "Kanan bawah"], ["bottom-center", "Tengah bawah"], ["after-avatar", "Di samping foto profil"], ["top-center", "Tengah atas"],
+        ["center", "Tengah banner"], ["right-column", "Kolom kanan"], ["left-column", "Kolom kiri"], ["custom", "Bebas (hasil seret)"]],
         hint: "Di mode edit, seret ikon sosial langsung di preview untuk memindahkannya." },
-      { path: "socials.direction", label: "Arah susunan ikon", type: "select",
-        options: [["row", "Mendatar"], ["column", "Menurun"]] },
+      { path: "socials.direction", label: "Arah susunan ikon", type: "select", options: [["row", "Mendatar"], ["column", "Menurun"]] },
       { path: "socials.x", label: "Posisi horizontal (%)", type: "range", min: 0, max: 100, step: 1, when: isOneOf("socials.pos", ["custom"]) },
       { path: "socials.y", label: "Posisi vertikal (%)", type: "range", min: 0, max: 100, step: 1, when: isOneOf("socials.pos", ["custom"]) }
     ], list: {
       path: "socials.items", max: 6, itemName: "Ikon",
+      title: function (it, i) { return "Ikon " + (i + 1) + " · " + (it.type === "custom" ? "sendiri" : it.type); },
       blank: function () { return { type: "github", url: "https://github.com" }; },
       fields: function (b) { return [
         { path: b + "type", label: "Platform", type: "select", options: PC.SOCIAL_TYPES },
         { path: b + "url", label: "Link", type: "text", hint: "https://… · mailto:… · tel:…" },
-        { type: "image", path: b + "icon", label: "Ikon sendiri", icon: true,
-          hint: "PNG/SVG/JPG. Pakai gambar transparan agar bisa diwarnai putih.",
-          when: function () { return get(b + "type") === "custom"; } },
-        { path: b + "tint", label: "Warnai ikon mengikuti tema (matikan = warna asli gambar)", type: "check",
-          when: function () { return get(b + "type") === "custom"; } }
+        { type: "image", path: b + "icon", label: "Ikon sendiri", icon: true, when: function () { return get(b + "type") === "custom"; },
+          hint: "PNG/SVG/JPG transparan agar bisa diwarnai putih. Bisa juga seret file ke sini." },
+        { path: b + "tint", label: "Warnai ikon mengikuti tema (matikan = warna asli gambar)", type: "check", when: function () { return get(b + "type") === "custom"; } }
       ]; }
     }},
-    { title: "Follow, Following & Followers", fields: [
+    { tab: "banner", title: "Follow, Following & Followers", fields: [
       { path: "follow.show", label: "Tampilkan tombol Follow", type: "check" },
       { path: "follow.position", label: "Posisi tombol Follow", type: "select",
         options: [["below", "Di bawah banner (kanan)"], ["banner", "Di banner (sebelah ikon sosial)"]] },
@@ -180,10 +211,13 @@
       { path: "follow.followers", label: "Jumlah Followers", type: "text", hint: "Klik Follow di preview → angka Followers bertambah 1." },
       { path: "follow.followersLabel", label: "Label Followers", type: "text" }
     ]},
-    { title: "Link (di bawah Following/Followers)", fields: [
+
+    /* ===== KONTEN ===== */
+    { tab: "konten", title: "Link (di bawah Following/Followers)", fields: [
       { path: "links.show", label: "Tampilkan link", type: "check" }
     ], list: {
       path: "links.items", max: 5, itemName: "Link",
+      title: function (it, i) { return "Link " + (i + 1) + (it.text ? " · " + it.text : ""); },
       blank: function () { return { text: "Portfolio", url: "https://", icon: "star", style: "pill", mode: "gradient", color1: "#7c5cff", color2: "#4f8bff", textColor: "#ffffff" }; },
       fields: function (b) { return [
         { path: b + "text", label: "Teks", type: "text" },
@@ -198,10 +232,7 @@
         { path: b + "textColor", label: "Warna teks tombol", type: "color", when: function () { return get(b + "style") === "pill"; } }
       ]; }
     }},
-    { title: "Tombol simpan (bookmark)", fields: [
-      { path: "bookmark.show", label: "Tampilkan tombol simpan", type: "check" }
-    ]},
-    { title: "More Info (panel buka ke bawah)", fields: [
+    { tab: "konten", title: "More Info (section yang terbuka ke bawah)", fields: [
       { path: "cta.show", label: "Tampilkan tombol More Info", type: "check" },
       { path: "cta.text", label: "Teks tombol", type: "text" },
       { path: "cta.defaultOpen", label: "Terbuka saat halaman dimuat", type: "check" },
@@ -212,49 +243,112 @@
       { path: "cta.textMode", label: "Warna teks tombol", type: "select",
         options: [["auto", "Otomatis (ikut tema)"], ["solid", "Solid"], ["gradient", "Gradient"]] },
       { path: "cta.textColor1", label: "Warna teks 1", type: "color", when: isOneOf("cta.textMode", ["solid", "gradient"]) },
-      { path: "cta.textColor2", label: "Warna teks 2", type: "color", when: isGrad("cta.textMode") },
-      { path: "cta.about", label: "Teks tambahan di panel", type: "textarea" }
+      { path: "cta.textColor2", label: "Warna teks 2", type: "color", when: isGrad("cta.textMode") }
     ], list: {
-      path: "cta.items", max: 6, itemName: "Info",
-      blank: function () { return { label: "Label", value: "Isi" }; },
+      path: "cta.sections", max: 6, itemName: "Section",
+      title: function (it, i) { return "Section " + (i + 1) + (it.title ? " · " + it.title : ""); },
+      blank: function () { return { title: "Judul", showTitle: true, titleAlign: "center", columns: 1, gap: 10, effect: "stagger", items: [ROW_BLANK()] }; },
       fields: function (b) { return [
-        { path: b + "label", label: "Label", type: "text" },
-        { path: b + "value", label: "Isi", type: "text" }
+        { path: b + "title", label: "Judul section", type: "text" },
+        { path: b + "showTitle", label: "Tampilkan judul", type: "check" },
+        { path: b + "titleAlign", label: "Posisi judul", type: "choice", cols: 3, options: ALIGN3 },
+        { path: b + "columns", label: "Layout kolom", type: "choice", cols: 3, options: [["1", "1 kolom"], ["2", "2 kolom"], ["3", "3 kolom"]] },
+        { path: b + "gap", label: "Jarak antar item (px)", type: "range", min: 0, max: 30, step: 1 },
+        { path: b + "effect", label: "Efek muncul saat dibuka", type: "select",
+          options: [["none", "Tanpa efek"], ["fade", "Fade"], ["stagger", "Naik bergantian (stagger)"]] },
+        { type: "list", spec: {
+          path: b + "items", max: 12, itemName: "Item", title: ITEM_TITLE, blank: ROW_BLANK,
+          fields: function (ib) {
+            var row = isType(ib, ["row"]), img = isType(ib, ["image"]), txt = isType(ib, ["text"]);
+            return [
+              { path: ib + "type", label: "Jenis item", type: "choice", cols: 3, options: [["row", "Baris"], ["image", "Gambar"], ["text", "Teks"]] },
+              /* baris */
+              { path: ib + "label", label: "Label", type: "text", when: row },
+              { path: ib + "value", label: "Isi teks (kanan)", type: "text", when: row },
+              { path: ib + "tone", label: "Gaya latar baris", type: "select", when: row, options: [
+                ["soft", "Lembut"], ["dark", "Gelap"], ["glass", "Glass"], ["none", "Tanpa latar"], ["custom", "Warna sendiri"]] },
+              { path: ib + "customMode", label: "Warna latar", type: "select", options: COLOR_MODES,
+                when: function () { return row() && get(ib + "tone") === "custom"; } },
+              { path: ib + "customColor1", label: "Warna latar 1", type: "color", when: function () { return row() && get(ib + "tone") === "custom"; } },
+              { path: ib + "customColor2", label: "Warna latar 2", type: "color",
+                when: function () { return row() && get(ib + "tone") === "custom" && get(ib + "customMode") === "gradient"; } },
+              { path: ib + "iconAlign", label: "Posisi isi / ikon", type: "choice", cols: 3, options: ALIGN3, when: row },
+              { path: ib + "iconSize", label: "Ukuran ikon (px)", type: "range", min: 14, max: 64, step: 1, when: row },
+              { path: ib + "iconShape", label: "Bentuk ikon", type: "select", when: row,
+                options: [["rounded", "Rounded"], ["circle", "Bulat"], ["square", "Kotak"], ["tile", "Tile (dengan latar)"]] },
+              { path: ib + "maxIcons", label: "Ikon yang tampil (0 = semua)", type: "range", min: 0, max: 12, step: 1, when: row,
+                hint: "Sisanya jadi badge “3+” yang bisa diklik untuk membuka semua." },
+              { path: ib + "effect", label: "Efek hover ikon", type: "select", when: row,
+                options: [["none", "Tanpa efek"], ["lift", "Naik"], ["zoom", "Zoom"], ["glow", "Glow"]] },
+              { type: "multiupload", path: ib + "icons", label: "Tambah ikon", when: row },
+              { type: "list", when: row, spec: {
+                path: ib + "icons", max: 24, itemName: "Ikon",
+                title: function (it, i) { return "Ikon " + (i + 1) + (it.name ? " · " + it.name : ""); },
+                blank: function () { return { src: "", name: "", url: "" }; },
+                fields: function (kb) { return [
+                  { type: "image", path: kb + "src", label: "Gambar ikon", icon: true },
+                  { path: kb + "name", label: "Nama (muncul saat kursor di atas ikon)", type: "text" },
+                  { path: kb + "url", label: "Link (opsional)", type: "text" }
+                ]; }
+              }},
+              /* gambar */
+              { type: "image", path: ib + "src", label: "Gambar", photo: true, when: img, hint: "Atau seret file ke kotak ini." },
+              { path: ib + "height", label: "Tinggi gambar (px)", type: "range", min: 40, max: 320, step: 2, when: img },
+              { path: ib + "fit", label: "Pas gambar", type: "select", options: [["cover", "Penuhi (crop)"], ["contain", "Utuh (contain)"]], when: img },
+              { path: ib + "radius", label: "Sudut gambar (px)", type: "range", min: 0, max: 40, step: 1, when: img },
+              { path: ib + "caption", label: "Keterangan gambar", type: "text", when: img },
+              /* teks */
+              { path: ib + "text", label: "Isi teks", type: "textarea", when: txt },
+              { path: ib + "align", label: "Perataan", type: "choice", cols: 3, options: ALIGN3, when: function () { return txt() || img(); } },
+              /* umum */
+              { path: ib + "span", label: "Lebar di layout kolom", type: "choice", cols: 2, options: [["1", "1 kolom"], ["all", "Penuh"]] }
+            ];
+          }
+        }}
       ]; }
     }, after: [
-      { path: "cta.actionShow", label: "Tampilkan tombol aksi di panel", type: "check" },
+      { path: "cta.actionShow", label: "Tampilkan tombol aksi di bawah section", type: "check" },
       { path: "cta.actionText", label: "Teks tombol aksi", type: "text" },
       { path: "cta.actionUrl", label: "Link tombol aksi", type: "text", hint: "https://wa.me/62812…  ·  mailto:email@domain.com" }
     ]},
-    { title: "Tema gelap / terang & font", fields: [
+    { tab: "konten", title: "Copyright", fields: [
+      { path: "copyright.show", label: "Tampilkan copyright", type: "check" },
+      { path: "copyright.text", label: "Teks copyright", type: "text" },
+      { path: "copyright.align", label: "Posisi teks", type: "choice", cols: 3, options: ALIGN3 },
+      { path: "copyright.placement", label: "Letak", type: "choice", cols: 2, options: [["always", "Selalu di bawah kartu"], ["inside", "Di dalam panel More Info"]] },
+      { path: "copyright.size", label: "Ukuran teks (px)", type: "range", min: 9, max: 18, step: 1 }
+    ]},
+    { tab: "konten", title: "Susunan blok (drag & drop)", custom: "order" },
+
+    /* ===== TEMA ===== */
+    { tab: "tema", title: "Tema & font", fields: [
       { path: "theme.mode", label: "Tema awal", type: "select",
         options: [["dark", "Gelap"], ["light", "Terang"], ["system", "Ikuti sistem perangkat"]],
         hint: "Pengunjung bisa mengganti lewat ikon matahari/bulan di pojok kiri atas banner." },
-      { path: "theme.fontFamily", label: "Font", type: "select", options: PC.FONTS,
-        hint: "Dimuat dari Google Fonts (perlu internet)." },
+      { path: "theme.fontFamily", label: "Font", type: "select", options: PC.FONTS, hint: "Dimuat dari Google Fonts (perlu internet)." },
       { path: "theme.accent", label: "Warna aksen (tombol simpan)", type: "color" }
     ]},
-    { title: "Warna — Tema Terang", mode: "light", fields: paletteFields("light") },
-    { title: "Warna — Tema Gelap", mode: "dark", fields: paletteFields("dark") },
-    { title: "Background halaman", fields: [
+    { tab: "tema", title: "Palet warna", head: "palette", fields: [].concat(paletteFields("light"), paletteFields("dark")) },
+    { tab: "tema", title: "Background halaman", fields: [
       { path: "theme.bgMode", label: "Jenis background", type: "select",
         options: [["orbs", "Glass (orb warna blur)"], ["image", "Gambar upload"], ["solid", "Satu warna"]] },
       { type: "image", key: "background", path: "assets.background", label: "Upload gambar background",
-        hint: "JPG/PNG. Otomatis mengaktifkan jenis \"Gambar upload\".",
-        when: isOneOf("theme.bgMode", ["image"]) },
+        hint: "JPG/PNG. Otomatis mengaktifkan jenis \"Gambar upload\". Bisa juga seret file ke sini.", when: isOneOf("theme.bgMode", ["image"]) },
       { path: "theme.bgBlur", label: "Blur gambar (px)", type: "range", min: 0, max: 30, step: 1, when: isOneOf("theme.bgMode", ["image"]) },
       { path: "theme.bgDim", label: "Gelapkan gambar", type: "range", min: 0, max: 0.8, step: 0.05, when: isOneOf("theme.bgMode", ["image"]) },
       { path: "theme.orbAnimate", label: "Animasikan orb", type: "check", when: isOneOf("theme.bgMode", ["orbs"]) },
       { path: "theme.glassBlur", label: "Blur kaca pada kartu (px)", type: "range", min: 0, max: 40, step: 1 }
     ]},
-    { title: "Semua gambar", custom: "images" },
-    { title: "Bentuk kartu", fields: [
+    { tab: "tema", title: "Bentuk kartu", fields: [
       { path: "theme.cardWidth", label: "Lebar kartu (px)", type: "range", min: 240, max: 480, step: 5 },
       { path: "theme.cardRadius", label: "Sudut kartu (px)", type: "range", min: 0, max: 48, step: 1 },
       { path: "theme.cardBorderWidth", label: "Tebal garis tepi kartu (px)", type: "range", min: 0, max: 6, step: 1 },
       { path: "theme.shadow", label: "Bayangan kartu", type: "check" }
     ]},
-    { title: "Info halaman (tab & SEO)", fields: [
+
+    /* ===== ASET ===== */
+    { tab: "aset", title: "Semua gambar", custom: "images" },
+    { tab: "aset", title: "Info halaman (tab browser & SEO)", fields: [
       { path: "meta.title", label: "Judul tab", type: "text" },
       { path: "meta.description", label: "Deskripsi", type: "textarea" },
       { path: "meta.lang", label: "Kode bahasa", type: "text", hint: "id, en, …" }
@@ -290,8 +384,44 @@
   var uid = 0;
   function nextId() { return "f" + (++uid); }
 
-  /* ---------- state ---------- */
-  var saveTimer;
+  /* ---------- state, draft & riwayat (undo / redo) ---------- */
+  var saveTimer, histTimer, restoring = false;
+  var hist = [JSON.stringify(cfg)], hi = 0;
+
+  function updateHistUI() {
+    $("#btnUndo").disabled = hi <= 0 && !histTimer;
+    $("#btnRedo").disabled = hi >= hist.length - 1;
+  }
+  function pushHistory() {
+    if (restoring) return;
+    clearTimeout(histTimer);
+    histTimer = setTimeout(flushHistory, 450);
+    updateHistUI();
+  }
+  function flushHistory() {
+    if (!histTimer) return;
+    clearTimeout(histTimer); histTimer = null;
+    var s = JSON.stringify(cfg);
+    if (s !== hist[hi]) {
+      hist = hist.slice(0, hi + 1);
+      hist.push(s);
+      if (hist.length > 80) hist.shift();
+      hi = hist.length - 1;
+    }
+    updateHistUI();
+  }
+  function restoreHistory(toast_) {
+    restoring = true;
+    cfg = JSON.parse(hist[hi]);
+    refresh();
+    rebuildPanel();
+    restoring = false;
+    updateHistUI();
+    toast(toast_);
+  }
+  function undo() { flushHistory(); if (hi > 0) { hi--; restoreHistory("Undo"); } }
+  function redo() { flushHistory(); if (hi < hist.length - 1) { hi++; restoreHistory("Redo"); } }
+
   function scheduleSave() {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(function () {
@@ -299,13 +429,14 @@
       setStatus(ok ? "Draft tersimpan di browser ini (buka index dengan tombol “Buka index”)."
                    : "Gagal menyimpan draft (storage penuh?). Gunakan Export ZIP.", !ok);
     }, 250);
+    pushHistory();
   }
 
   function refresh() {
     PC.applyTheme(shell, cfg);
     PC.render(cardEl, cfg);
     PC.applyMeta(cfg);
-    document.title = "Demo — " + (cfg.profile.name || "Profile Card");
+    document.title = "Studio — " + (cfg.profile.name || "Profile Card");
     scheduleSave();
   }
 
@@ -315,18 +446,19 @@
     if (path === "theme.mode") PC.runtime.mode = null;
     // Mengubah warna terang/gelap -> preview pindah ke tema yang sedang diedit
     var m = /^theme\.(light|dark)\./.exec(path);
-    if (m) PC.runtime.mode = m[1];
+    if (m) { PC.runtime.mode = m[1]; ui.palette = m[1]; }
     if (path === "cta.defaultOpen") PC.runtime.open = null;
     if (opts && opts.noRender) { PC.applyMeta(cfg); scheduleSave(); }
     else refresh();
     updateWhen();
-    if (!opts || !opts.keepPanel) syncPanel();
+    if (!opts || !opts.keepPanel) syncPanel(); else syncSegments();
   }
 
   /* ---------- builder form ---------- */
   var whenList = [];
-  var orderBox = null;
   var choices = [];
+  var orderBox = null;
+  var searchEl = $("#search");
 
   function updateWhen() {
     whenList = whenList.filter(function (w) { return w.node.isConnected; });
@@ -338,8 +470,15 @@
   }
 
   function fieldControl(f) {
-    var node = f.type === "image" ? imageField(f) : baseControl(f);
-    if (f.when) { whenList.push({ node: node, fn: f.when }); }
+    var node;
+    if (f.type === "image") node = imageField(f);
+    else if (f.type === "multiupload") node = multiUpload(f);
+    else if (f.type === "list") node = buildList(f.spec);
+    else node = baseControl(f);
+    if (f.when) {
+      whenList.push({ node: node, fn: f.when });
+      node._whenFn = f.when;
+    }
     return node;
   }
 
@@ -415,22 +554,46 @@
     ]);
   }
 
-  /* field gambar: thumbnail + path/URL + Upload + Reset */
+  /* ---------- drop file ke elemen ---------- */
+  function isFileDrag(e) {
+    var t = e.dataTransfer && e.dataTransfer.types;
+    return !!t && Array.prototype.indexOf.call(t, "Files") !== -1;
+  }
+  function enableDrop(node, onFiles) {
+    node.addEventListener("dragover", function (e) {
+      if (!isFileDrag(e)) return;
+      e.preventDefault(); e.stopPropagation();
+      e.dataTransfer.dropEffect = "copy";
+      node.classList.add("dropping");
+    });
+    node.addEventListener("dragleave", function (e) {
+      if (!node.contains(e.relatedTarget)) node.classList.remove("dropping");
+    });
+    node.addEventListener("drop", function (e) {
+      if (!isFileDrag(e)) return;
+      e.preventDefault(); e.stopPropagation();
+      node.classList.remove("dropping");
+      if (e.dataTransfer.files && e.dataTransfer.files.length) onFiles(e.dataTransfer.files);
+    });
+  }
+
+  /* field gambar: thumbnail + path/URL + Upload + Reset (+ seret file ke sini) */
   function imageField(f) {
     var path = f.path;
-    var key = f.key || null;                    // kunci aset (assets.*) atau null = ikon sendiri
+    var key = f.key || null;                    // kunci aset (assets.*) atau null = ikon / gambar bebas
+    var kind = f.photo ? "photo" : "icon";
     var id = nextId();
     var thumb = h("img", { alt: "", "data-thumb": path });
     var txt = h("input", { type: "text", id: id, "data-path": path, spellcheck: "false", autocomplete: "off" });
     txt.addEventListener("input", function () { setValue(path, txt.value.trim(), { keepPanel: true }); updateThumbs(); });
     var up = h("button", { type: "button", class: "btn", text: "Upload" });
-    up.addEventListener("click", function () { pickImage(key, null, path); });
+    up.addEventListener("click", function () { pickImage(key, null, path, kind); });
     var rs = h("button", { type: "button", class: "btn", text: key ? "Reset" : "Hapus" });
     rs.addEventListener("click", function () {
       setValue(path, key ? (DEFAULTS.assets[key] || "") : "");
       updateThumbs();
     });
-    return h("div", { class: "field" }, [
+    var wrap = h("div", { class: "field" }, [
       h("label", { for: id, text: f.label }),
       h("div", { class: "img-row" }, [
         h("div", { class: "thumbbox" }, [thumb]),
@@ -439,9 +602,43 @@
       ]),
       f.hint ? h("small", { text: f.hint }) : null
     ]);
+    enableDrop(wrap, function (files) { applyImageFile(files[0], key, path, kind); });
+    return wrap;
   }
 
-  /* drag & drop berbasis pointer (jalan di mouse & layar sentuh) */
+  /* upload banyak ikon sekaligus (klik atau seret banyak file) */
+  function multiUpload(f) {
+    var input = h("input", { type: "file", accept: "image/*", multiple: true, hidden: true });
+    var btn = h("button", { type: "button", class: "btn primary mini", text: "Pilih gambar…" });
+    var zone = h("div", { class: "dropzone" }, [h("div", { text: "Seret banyak gambar ke sini, atau" }), btn, input]);
+    function addFiles(files) {
+      var arr = Array.prototype.slice.call(files).filter(function (x) { return /^image\//.test(x.type); });
+      if (!arr.length) { toast("Tidak ada file gambar"); return; }
+      Promise.all(arr.map(function (file) {
+        return processImage(file, ICON_SPEC).then(function (d) { return { src: d, name: file.name.replace(/\.[^.]+$/, ""), url: "" }; });
+      })).then(function (list) {
+        var cur = get(f.path);
+        if (!Array.isArray(cur)) { PC.setPath(cfg, f.path, []); cur = get(f.path); }
+        list.forEach(function (x) { cur.push(x); });
+        refresh(); rebuildPanel();
+        toast(list.length + " ikon ditambahkan");
+      }).catch(function () { toast("Gagal membaca gambar"); });
+    }
+    btn.addEventListener("click", function () { input.click(); });
+    input.addEventListener("change", function () { if (input.files && input.files.length) addFiles(input.files); input.value = ""; });
+    enableDrop(zone, addFiles);
+    return h("div", { class: "field" }, [h("label", { text: f.label }), zone]);
+  }
+
+  function buildImages() {
+    var box = h("div", { class: "sec-body" });
+    IMAGE_FIELDS.forEach(function (f) {
+      box.appendChild(imageField({ key: f.key, path: "assets." + f.key, label: f.label, hint: f.hint }));
+    });
+    return box;
+  }
+
+  /* ---------- drag & drop berbasis pointer (mouse & layar sentuh) ---------- */
   var dropLine = h("div", { class: "drop-line" });
   dropLine.hidden = true;
   document.body.appendChild(dropLine);
@@ -483,84 +680,38 @@
     place(e);
   }
 
-  /* bagian "Susunan blok": urutan nama / username / bio / stats / link / More Info */
-  function buildOrder() {
-    var box = h("div", { class: "sec-body order-box" });
-    function draw() {
-      box.textContent = "";
-      box.appendChild(h("small", { text: "Seret ⠿ (atau pakai ↑↓) untuk mengubah susunan. Di mode edit kamu juga bisa menyeret blok langsung di preview." }));
-      var order = PC.normalizeOrder(cfg.layout && cfg.layout.order);
-      var names = {};
-      PC.BLOCKS.forEach(function (b) { names[b[0]] = b[1]; });
-      var rows = order.map(function (k, i) {
-        var grip = h("span", { class: "grip", title: "Seret", text: "⠿" });
-        var up = h("button", { type: "button", class: "mv", text: "↑", title: "Naikkan" });
-        var dn = h("button", { type: "button", class: "mv", text: "↓", title: "Turunkan" });
-        var row = h("div", { class: "sort-row" }, [grip, h("span", { class: "nm", text: names[k] }), up, dn]);
-        up.addEventListener("click", function () { move(i, i - 1); });
-        dn.addEventListener("click", function () { move(i, i + 1); });
-        grip.addEventListener("pointerdown", function (e) {
-          startSort(e, function () { return $$(".sort-row", box); }, i, move);
-        });
-        return row;
-      });
-      function move(from, to) {
-        if (to < 0 || to >= order.length) return;
-        order.splice(to, 0, order.splice(from, 1)[0]);
-        setValue("layout.order", order.slice());
-        draw();
-      }
-      rows.forEach(function (r) { box.appendChild(r); });
-    }
-    box._draw = draw;
-    draw();
-    return box;
-  }
-
-  function buildImages() {
-    var box = h("div", { class: "sec-body" });
-    IMAGE_FIELDS.forEach(function (f) {
-      box.appendChild(imageField({ key: f.key, path: "assets." + f.key, label: f.label, hint: f.hint }));
-    });
-    return box;
-  }
-
-  /* daftar yang bisa ditambah / dihapus */
+  /* daftar yang bisa ditambah / dihapus / diurutkan (bisa bersarang) */
   function buildList(spec) {
     var box = h("div", { class: "list-box" });
-    (PC.getPath(cfg, spec.path) || []).forEach(function (item, i) {
+    box._spec = spec;
+    var arr = PC.getPath(cfg, spec.path) || [];
+    function reorder(from, to) {
+      var a = PC.getPath(cfg, spec.path);
+      if (to < 0 || to >= a.length || from === to) return;
+      a.splice(to, 0, a.splice(from, 1)[0]);
+      refresh(); rebuildList(box, spec);
+    }
+    arr.forEach(function (item, i) {
       var base = spec.path + "." + i + ".";
+      var grip = h("span", { class: "grip", title: "Seret untuk mengubah urutan", text: "⠿" });
+      var up = h("button", { type: "button", class: "mv", title: "Naikkan", text: "↑" });
+      var dn = h("button", { type: "button", class: "mv", title: "Turunkan", text: "↓" });
       var rm = h("button", { type: "button", class: "link-btn", text: "Hapus" });
+      up.addEventListener("click", function () { reorder(i, i - 1); });
+      dn.addEventListener("click", function () { reorder(i, i + 1); });
       rm.addEventListener("click", function () {
         PC.getPath(cfg, spec.path).splice(i, 1);
         refresh(); rebuildList(box, spec);
       });
-      var grip = h("span", { class: "grip", title: "Seret untuk mengubah urutan", text: "⠿" });
-      var up = h("button", { type: "button", class: "mv", title: "Naikkan", text: "↑" });
-      var dn = h("button", { type: "button", class: "mv", title: "Turunkan", text: "↓" });
-      var moveTo = function (to) {
-        var a = PC.getPath(cfg, spec.path);
-        if (to < 0 || to >= a.length) return;
-        a.splice(to, 0, a.splice(i, 1)[0]);
-        refresh(); rebuildList(box, spec);
-      };
-      up.addEventListener("click", function () { moveTo(i - 1); });
-      dn.addEventListener("click", function () { moveTo(i + 1); });
-      var card = h("div", { class: "list-card", "data-list-item": spec.path + "." + i }, [
-        h("header", {}, [h("span", { class: "ttl" }, [grip, h("span", { text: spec.itemName + " " + (i + 1) })]),
-                         h("span", { class: "hbtns" }, [up, dn, rm])])
-      ].concat(spec.fields(base).map(fieldControl)));
       grip.addEventListener("pointerdown", function (e) {
-        startSort(e, function () { return $$(":scope > .list-card", box); }, i, function (from, to) { moveTo2(from, to); });
+        startSort(e, function () { return $$(":scope > .list-card", box); }, i, reorder);
       });
-      var moveTo2 = function (from, to) {
-        var a = PC.getPath(cfg, spec.path);
-        a.splice(to, 0, a.splice(from, 1)[0]);
-        refresh(); rebuildList(box, spec);
-      };
+      var ttl = spec.title ? spec.title(item || {}, i) : spec.itemName + " " + (i + 1);
+      var card = h("div", { class: "list-card", "data-list-item": spec.path + "." + i }, [
+        h("header", {}, [h("span", { class: "ttl" }, [grip, h("span", { text: ttl })]), h("span", { class: "hbtns" }, [up, dn, rm])])
+      ].concat(spec.fields(base).map(fieldControl)));
       box.appendChild(card);
     });
-    var arr = PC.getPath(cfg, spec.path) || [];
     if (arr.length < spec.max) {
       var add = h("button", { type: "button", class: "btn", text: "+ Tambah " + spec.itemName.toLowerCase() });
       add.addEventListener("click", function () {
@@ -577,50 +728,218 @@
 
   function rebuildList(box, spec) {
     var nu = buildList(spec);
+    if (box._whenFn) { nu._whenFn = box._whenFn; whenList.push({ node: nu, fn: box._whenFn }); }
+    if (box.dataset.ftext) nu.dataset.ftext = box.dataset.ftext;
     box.parentNode.replaceChild(nu, box);
     syncPanel();
   }
 
+  /* bagian "Susunan blok": urutan nama / username / bio / stats / link / More Info */
+  function buildOrder() {
+    var box = h("div", { class: "sec-body order-box" });
+    function draw() {
+      box.textContent = "";
+      box.appendChild(h("small", { text: "Seret ⠿ (atau pakai ↑↓) untuk mengubah susunan. Di mode edit kamu juga bisa menyeret blok langsung di preview." }));
+      var order = PC.normalizeOrder(cfg.layout && cfg.layout.order);
+      var names = {};
+      PC.BLOCKS.forEach(function (b) { names[b[0]] = b[1]; });
+      function move(from, to) {
+        if (to < 0 || to >= order.length) return;
+        order.splice(to, 0, order.splice(from, 1)[0]);
+        if (!cfg.layout) cfg.layout = {};
+        setValue("layout.order", order.slice());
+        draw();
+      }
+      order.forEach(function (k, i) {
+        var grip = h("span", { class: "grip", title: "Seret", text: "⠿" });
+        var up = h("button", { type: "button", class: "mv", text: "↑", title: "Naikkan" });
+        var dn = h("button", { type: "button", class: "mv", text: "↓", title: "Turunkan" });
+        var row = h("div", { class: "sort-row" }, [grip, h("span", { class: "nm", text: names[k] }), up, dn]);
+        up.addEventListener("click", function () { move(i, i - 1); });
+        dn.addEventListener("click", function () { move(i, i + 1); });
+        grip.addEventListener("pointerdown", function (e) {
+          startSort(e, function () { return $$(".sort-row", box); }, i, move);
+        });
+        box.appendChild(row);
+      });
+    }
+    box._draw = draw;
+    draw();
+    return box;
+  }
+
+  /* ---------- panel bertab ---------- */
+  function paletteHead() {
+    var seg = h("div", { class: "segmented", "data-seg": "palette" });
+    [["light", "☀ Terang"], ["dark", "☾ Gelap"]].forEach(function (o) {
+      var b = h("button", { type: "button", "data-val": o[0], text: o[1] });
+      b.addEventListener("click", function () {
+        ui.palette = o[0];
+        PC.runtime.mode = o[0];
+        refresh();
+        updateWhen(); syncSegments();
+      });
+      seg.appendChild(b);
+    });
+    return h("div", { class: "field" }, [
+      h("label", { text: "Edit palet untuk tema" }), seg,
+      h("small", { text: "Preview otomatis pindah ke tema yang sedang diedit." })
+    ]);
+  }
+
+  function syncSegments() {
+    $$('[data-seg="palette"] button', formEl).forEach(function (b) { b.classList.toggle("on", b.getAttribute("data-val") === ui.palette); });
+  }
+
+  function buildRail() {
+    var rail = $("#rail");
+    if (rail.children.length) return;
+    TABS.forEach(function (t) {
+      var b = h("button", { class: "rail-btn", type: "button", "data-tab": t.id, title: t.label });
+      b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + t.icon + "</svg><span>" + t.label + "</span>";
+      b.addEventListener("click", function () {
+        if (searchEl.value) { searchEl.value = ""; applySearch(""); }
+        showTab(t.id);
+      });
+      rail.appendChild(b);
+    });
+  }
+
+  function showTab(id, keepScroll) {
+    ui.tab = id;
+    $$(".tabpane", formEl).forEach(function (p) { p.classList.toggle("active", p.getAttribute("data-tab") === id); });
+    $$(".rail-btn").forEach(function (b) { b.classList.toggle("on", b.getAttribute("data-tab") === id); });
+    var t = TABS.filter(function (x) { return x.id === id; })[0];
+    if (t) $("#panelTitle").textContent = t.label;
+    if (!keepScroll) scrollEl.scrollTop = 0;
+    updateToggleAll();
+  }
+
+  function activeSections() {
+    return $$('.tabpane.active > details.sec', formEl);
+  }
+  function updateToggleAll() {
+    var any = activeSections().some(function (d) { return d.open; });
+    $("#btnToggleAll").textContent = any ? "Tutup semua" : "Buka semua";
+  }
+  $("#btnToggleAll").addEventListener("click", function () {
+    var secs = activeSections();
+    var open = !secs.some(function (d) { return d.open; });
+    secs.forEach(function (d) { d.open = open; });
+    updateToggleAll();
+  });
+
   function buildPanel() {
     formEl.textContent = "";
-    whenList = [];
-    choices = [];
+    whenList = []; choices = []; orderBox = null;
+    TABS.forEach(function (t) { formEl.appendChild(h("div", { class: "tabpane", "data-tab": t.id })); });
+    var firstOfTab = {};
     SECTIONS.forEach(function (sec) {
-      var d = h("details", { class: "sec" }, [h("summary", { text: sec.title })]);
-      if (sec.open) d.setAttribute("open", "");
-      if (sec.custom === "images") d.appendChild(buildImages());
-      else if (sec.custom === "order") { orderBox = buildOrder(); d.appendChild(orderBox); }
-      else {
-        var body = h("div", { class: "sec-body" }, (sec.fields || []).map(fieldControl));
-        if (sec.list) body.appendChild(buildList(sec.list));
-        if (sec.after) sec.after.forEach(function (f) { body.appendChild(fieldControl(f)); });
+      var pane = $('.tabpane[data-tab="' + sec.tab + '"]', formEl);
+      var d = h("details", { class: "sec", "data-title": sec.title.toLowerCase() }, [h("summary", { text: sec.title })]);
+      if (!firstOfTab[sec.tab]) { firstOfTab[sec.tab] = true; d.setAttribute("open", ""); }
+      var searchHay = sec.title.toLowerCase();
+      if (sec.custom === "images") {
+        var ib = buildImages();
+        $$(".field", ib).forEach(function (n) { n.dataset.ftext = n.textContent.toLowerCase(); });
+        d.appendChild(ib);
+      } else if (sec.custom === "order") {
+        orderBox = buildOrder();
+        orderBox.dataset.ftext = "susunan urutan blok drag drop";
+        d.appendChild(orderBox);
+      } else {
+        var body = h("div", { class: "sec-body" });
+        if (sec.head === "palette") body.appendChild(paletteHead());
+        (sec.fields || []).forEach(function (f) {
+          var n = fieldControl(f);
+          n.dataset.ftext = ((f.label || "") + " " + (f.hint || "") + " " + (f.path || "")).toLowerCase();
+          body.appendChild(n);
+        });
+        if (sec.list) {
+          var lb = buildList(sec.list);
+          var lab = [];
+          try { sec.list.fields("x.").forEach(function (f) { lab.push(f.label || ""); }); } catch (e) {}
+          lb.dataset.ftext = (sec.list.itemName + " " + lab.join(" ")).toLowerCase();
+          body.appendChild(lb);
+        }
+        (sec.after || []).forEach(function (f) {
+          var n = fieldControl(f);
+          n.dataset.ftext = ((f.label || "") + " " + (f.hint || "") + " " + (f.path || "")).toLowerCase();
+          body.appendChild(n);
+        });
         d.appendChild(body);
       }
-      d.addEventListener("toggle", function () {
-        if (!d.open) return;
-        // akordeon: hanya satu bagian terbuka (lebih rapi, dan sinkron dengan klik di preview)
-        $$("details.sec", formEl).forEach(function (o) { if (o !== d && o.open) o.open = false; });
-        if (sec.mode) { PC.runtime.mode = sec.mode; refresh(); } // buka warna terang/gelap -> preview pindah tema itu
-      });
-      formEl.appendChild(d);
+      d.dataset.hay = searchHay;
+      d.addEventListener("toggle", updateToggleAll);
+      pane.appendChild(d);
     });
+    buildRail();
+    showTab(ui.tab || "profil", true);
     syncPanel();
   }
+
+  // bangun ulang panel tanpa kehilangan tab, posisi scroll, dan bagian yang terbuka
+  function rebuildPanel() {
+    var st = scrollEl.scrollTop;
+    var open = {};
+    $$("details.sec", formEl).forEach(function (d) { open[d.getAttribute("data-title")] = d.open; });
+    buildPanel();
+    $$("details.sec", formEl).forEach(function (d) {
+      var k = d.getAttribute("data-title");
+      if (k in open) d.open = open[k];
+    });
+    scrollEl.scrollTop = st;
+    updateToggleAll();
+    if (searchEl.value) applySearch(searchEl.value);
+  }
+
+  /* ---------- pencarian pengaturan ---------- */
+  function applySearch(q) {
+    q = (q || "").trim().toLowerCase();
+    formEl.classList.toggle("searching", !!q);
+    var any = false;
+    $$("details.sec", formEl).forEach(function (d) {
+      var titleHit = !!q && d.getAttribute("data-title").indexOf(q) !== -1;
+      var hit = false;
+      $$(":scope > .sec-body > [data-ftext]", d).forEach(function (n) {
+        var ok = !q || titleHit || n.getAttribute("data-ftext").indexOf(q) !== -1;
+        n.classList.toggle("sfhide", !ok);
+        if (ok) hit = true;
+      });
+      var own = d.querySelector(":scope > .sec-body[data-ftext]");
+      if (own) {
+        var okOwn = !q || titleHit || own.getAttribute("data-ftext").indexOf(q) !== -1;
+        if (okOwn) hit = true;
+      }
+      var show = !q || titleHit || hit;
+      d.classList.toggle("sfhide", !show);
+      if (q && show) d.open = true;
+      if (show) any = true;
+    });
+    $("#noResult").classList.toggle("hidden", !q || any);
+    if (!q) showTab(ui.tab, true);
+  }
+  searchEl.addEventListener("input", function () { applySearch(searchEl.value); });
+  searchEl.addEventListener("keydown", function (e) { if (e.key === "Escape") { searchEl.value = ""; applySearch(""); searchEl.blur(); } });
 
   /* panel kiri langsung menuju pengaturan yang dipilih di preview */
   function focusField(path) {
     if (!path) return;
     var inp = formEl.querySelector('[data-path="' + path + '"]') || formEl.querySelector('[data-path-hex="' + path + '"]');
     if (!inp) return;
-    var d = inp.closest("details");
-    $$("details.sec", formEl).forEach(function (o) { if (o !== d && o.open) o.open = false; });
+    if (searchEl.value) { searchEl.value = ""; applySearch(""); }
+    var pane = inp.closest(".tabpane");
+    if (pane && pane.getAttribute("data-tab") !== ui.tab) showTab(pane.getAttribute("data-tab"), true);
+    var d = inp.closest("details.sec");
     if (d && !d.open) d.open = true;
+    // ciutkan bagian lain di tab ini supaya panel langsung tertuju ke pengaturan yang dipilih
+    $$(".tabpane.active > details.sec", formEl).forEach(function (o) { if (o !== d && o.open) o.open = false; });
+    updateToggleAll();
     var f = inp.closest(".field") || inp;
-    var panel = $("#panel");
     requestAnimationFrame(function () {
-      if (panel.scrollHeight > panel.clientHeight + 4) {
-        var pr = panel.getBoundingClientRect(), fr = f.getBoundingClientRect();
-        panel.scrollTo({ top: panel.scrollTop + (fr.top - pr.top) - pr.height / 3, behavior: "smooth" });
+      if (scrollEl.scrollHeight > scrollEl.clientHeight + 4) {
+        var pr = scrollEl.getBoundingClientRect(), fr = f.getBoundingClientRect();
+        scrollEl.scrollTo({ top: scrollEl.scrollTop + (fr.top - pr.top) - pr.height / 3, behavior: "smooth" });
       }
       f.classList.remove("flash");
       void f.offsetWidth;
@@ -653,29 +972,23 @@
     });
     choices.forEach(function (g) {
       if (!g.isConnected) return;
-      var v = PC.getPath(cfg, g._path);
+      var v = String(PC.getPath(cfg, g._path));
       $$("button", g).forEach(function (b) { b.classList.toggle("on", b.getAttribute("data-val") === v); });
     });
+    syncSegments();
     updateThumbs();
     updateWhen();
     if (orderBox && orderBox.isConnected && orderBox._draw) orderBox._draw();
   }
 
-  /* ---------- gambar: pilih & proses ---------- */
+  /* ---------- gambar: pilih, proses, terapkan ---------- */
   var picker = $("#imgPicker");
   var pickCb = null;
 
-  function pickImage(key, done, path) {
+  function pickImage(key, done, path, kind) {
     var target = path || ("assets." + key);
     pickCb = function (file) {
-      processImage(file, key).then(function (dataUrl) {
-        PC.setPath(cfg, target, dataUrl);
-        if (key === "banner" && cfg.theme.bannerMode !== "image") cfg.theme.bannerMode = "image";
-        if (key === "background") cfg.theme.bgMode = "image";
-        refresh(); syncPanel();
-        toast("Gambar diganti");
-        if (done) done();
-      }).catch(function () { toast("Gagal membaca gambar"); });
+      applyImageFile(file, key, target, kind).then(function () { if (done) done(); });
     };
     picker.value = "";
     picker.click();
@@ -685,8 +998,19 @@
     if (f && pickCb) pickCb(f);
   });
 
-  function processImage(file, key) {
-    var spec = key ? ASSET_FILES[key] : ICON_SPEC;
+  function applyImageFile(file, key, path, kind) {
+    if (!file || !/^image\//.test(file.type)) { toast("File harus berupa gambar"); return Promise.resolve(); }
+    var spec = key ? ASSET_FILES[key] : (kind === "photo" ? PHOTO_SPEC : ICON_SPEC);
+    return processImage(file, spec).then(function (dataUrl) {
+      PC.setPath(cfg, path, dataUrl);
+      if (key === "banner" && cfg.theme.bannerMode !== "image") cfg.theme.bannerMode = "image";
+      if (key === "background") cfg.theme.bgMode = "image";
+      refresh(); syncPanel();
+      toast("Gambar diganti");
+    }).catch(function () { toast("Gagal membaca gambar"); });
+  }
+
+  function processImage(file, spec) {
     return new Promise(function (resolve, reject) {
       var url = URL.createObjectURL(file);
       var img = new Image();
@@ -694,6 +1018,7 @@
         var w = img.naturalWidth || 128, hgt = img.naturalHeight || 128, sx = 0, sy = 0, sw = w, sh = hgt;
         if (spec.square) { var m = Math.min(w, hgt); sx = (w - m) / 2; sy = (hgt - m) / 2; sw = sh = m; }
         var scale = Math.min(1, spec.max / Math.max(sw, sh));
+        if (!isFinite(scale) || scale <= 0) scale = 1;
         var cw = Math.max(1, Math.round(sw * scale)), ch = Math.max(1, Math.round(sh * scale));
         var c = document.createElement("canvas");
         c.width = cw; c.height = ch;
@@ -706,6 +1031,10 @@
       img.onerror = function () { URL.revokeObjectURL(url); reject(); };
       img.src = url;
     });
+  }
+
+  function kindFor(path) {
+    return /\.items\.\d+\.src$/.test(path) && !/\.icons\.\d+\.src$/.test(path) ? "photo" : "icon";
   }
 
   /* ---------- Edit via klik (sinkron dengan panel kiri) ---------- */
@@ -860,8 +1189,10 @@
   }
 
   function openImagePop(node) {
-    var path = node.dataset.edit;           // mis. assets.profile
-    var key = path.split(".")[1];
+    var path = node.dataset.edit;           // mis. assets.profile  /  cta.sections.0.items.1.icons.2.src
+    var isAsset = path.indexOf("assets.") === 0;
+    var key = isAsset ? path.split(".")[1] : null;
+    var kind = kindFor(path);
     var label = node.dataset.label;
     pop.textContent = "";
     var url = h("input", { type: "text", placeholder: "assets/…  atau  https://…", spellcheck: "false" });
@@ -871,7 +1202,7 @@
     var apply = h("button", { type: "button", class: "btn", text: "OK" });
     var reset = h("button", { type: "button", class: "btn", text: "Reset" });
     var close = h("button", { type: "button", class: "btn ghost", text: "Tutup" });
-    upload.addEventListener("click", function () { pickImage(key, closePop); });
+    upload.addEventListener("click", function () { pickImage(key, closePop, path, kind); });
     apply.addEventListener("click", function () {
       setValue(path, url.value.trim());
       if (key === "banner" && url.value.trim()) setValue("theme.bannerMode", "image");
@@ -879,19 +1210,19 @@
       closePop();
     });
     url.addEventListener("keydown", function (e) { if (e.key === "Enter") apply.click(); });
-    reset.addEventListener("click", function () { setValue(path, DEFAULTS.assets[key] || ""); closePop(); });
+    reset.addEventListener("click", function () { setValue(path, isAsset ? (DEFAULTS.assets[key] || "") : ""); closePop(); });
     close.addEventListener("click", closePop);
     var parts = [h("h4", { text: label }), upload,
      h("div", { class: "row" }, [url, apply]),
      h("div", { class: "row" }, [reset, close])];
-    if (/^verified/.test(key)) {
+    if (/^verified/.test(key || "")) {
       var tin = h("input", { type: "text", placeholder: "Teks saat diklik", spellcheck: "false" });
       tin.value = cfg.profile.verifiedText || "";
       tin.addEventListener("input", function () { setValue("profile.verifiedText", tin.value, { keepPanel: true }); });
       parts.push(h("h4", { text: "Teks yang muncul di atas ikon" }), h("div", { class: "row" }, [tin]));
     }
     parts.forEach(function (n) { pop.appendChild(n); });
-    placePop(node, /^verified/.test(key) ? 250 : 170);
+    placePop(node, /^verified/.test(key || "") ? 250 : 170);
     url.focus();
   }
 
@@ -940,7 +1271,7 @@
   }
   cardEl.addEventListener("mouseover", function (e) {
     if (!editOn || editing || document.body.classList.contains("sorting")) return;
-    var b = e.target.closest ? e.target.closest("[data-block]") : null;
+    var b = e.target.closest ? e.target.closest("[data-sort-path],[data-block]") : null;
     if (b && cardEl.contains(b)) showGrip(b);
   });
   cardEl.addEventListener("mouseleave", function () {
@@ -950,19 +1281,36 @@
   gripEl.addEventListener("mouseenter", function () { gripHover = true; clearTimeout(gripTimer); });
   gripEl.addEventListener("mouseleave", function () { gripHover = false; hideGrip(); });
 
+  function sortInfo(node) {
+    if (node.getAttribute("data-block")) {
+      return { path: "layout.order", siblings: function () { return $$("[data-block]", cardEl); } };
+    }
+    var path = node.getAttribute("data-sort-path");
+    return { path: path, siblings: function () {
+      return Array.prototype.filter.call(node.parentNode.children, function (c) { return c.getAttribute("data-sort-path") === path; });
+    } };
+  }
+
   gripEl.addEventListener("pointerdown", function (e) {
     if (!gripFor) return;
-    var nodes = function () { return $$("[data-block]", cardEl); };
-    var from = nodes().indexOf(gripFor);
+    var node = gripFor, info = sortInfo(node);
+    var from = info.siblings().indexOf(node);
     if (from < 0) return;
     hideTag();
-    startSort(e, nodes, from, function (f, t) {
-      var keys = nodes().map(function (n) { return n.dataset.block; });
-      var moved = keys.slice();
-      moved.splice(t, 0, moved.splice(f, 1)[0]);
-      var full = PC.normalizeOrder(cfg.layout && cfg.layout.order), k = 0;
-      if (!cfg.layout) cfg.layout = {};
-      setValue("layout.order", full.map(function (x) { return keys.indexOf(x) !== -1 ? moved[k++] : x; }));
+    startSort(e, info.siblings, from, function (f, t) {
+      if (info.path === "layout.order") {
+        var keys = info.siblings().map(function (n) { return n.getAttribute("data-block"); });
+        var moved = keys.slice();
+        moved.splice(t, 0, moved.splice(f, 1)[0]);
+        var full = PC.normalizeOrder(cfg.layout && cfg.layout.order), k = 0;
+        if (!cfg.layout) cfg.layout = {};
+        setValue("layout.order", full.map(function (x) { return keys.indexOf(x) !== -1 ? moved[k++] : x; }));
+      } else {
+        var arr = (get(info.path) || []).slice();
+        arr.splice(t, 0, arr.splice(f, 1)[0]);
+        setValue(info.path, arr);
+        rebuildPanel();
+      }
       hideGrip();
     });
   });
@@ -1023,14 +1371,78 @@
   }
 
   /* ---------- lebar preview ---------- */
-  $$(".seg button").forEach(function (b) {
+  $$("#devSeg button").forEach(function (b) {
     b.addEventListener("click", function () {
-      $$(".seg button").forEach(function (x) { x.classList.toggle("on", x === b); });
+      $$("#devSeg button").forEach(function (x) { x.classList.toggle("on", x === b); });
       var w = parseInt(b.dataset.w, 10);
       var inner = $("#stageInner");
       inner.classList.toggle("fixed", w > 0);
       if (w > 0) inner.style.setProperty("--vw", w + "px"); else inner.style.removeProperty("--vw");
     });
+  });
+
+  /* ---------- drop file gambar ke preview (kartu atau background) ---------- */
+  function imgTargetAt(e) {
+    var n = e.target.closest ? e.target.closest("[data-edit][data-type='image']") : null;
+    if (n && cardEl.contains(n)) return n;
+    if (e.target.closest && cardEl.contains(e.target)) {
+      var bb = e.target.closest(".banner-box");
+      if (bb) return bb.querySelector(".banner");
+    }
+    return null;
+  }
+  var hotNode = null;
+  function clearHot() { if (hotNode) hotNode.classList.remove("drop-hot"); hotNode = null; shell.classList.remove("drop-bg"); }
+  stage.addEventListener("dragover", function (e) {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+    var t = imgTargetAt(e);
+    if (hotNode !== t) { clearHot(); hotNode = t; }
+    if (t) t.classList.add("drop-hot"); else shell.classList.add("drop-bg");
+  });
+  stage.addEventListener("dragleave", function (e) { if (!stage.contains(e.relatedTarget)) clearHot(); });
+  stage.addEventListener("drop", function (e) {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    var t = imgTargetAt(e);
+    clearHot();
+    var file = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (!file) return;
+    var path = t ? t.getAttribute("data-edit") : "assets.background";
+    var key = path.indexOf("assets.") === 0 ? path.split(".")[1] : null;
+    focusField(path);
+    applyImageFile(file, key, path, kindFor(path));
+  });
+  // cegah browser membuka file yang dijatuhkan di luar area drop
+  window.addEventListener("dragover", function (e) { if (isFileDrag(e)) e.preventDefault(); });
+  window.addEventListener("drop", function (e) { if (isFileDrag(e)) e.preventDefault(); });
+
+  /* ---------- menu export, undo/redo, shortcut ---------- */
+  var menu = $("#menu"), btnMenu = $("#btnMenu");
+  function closeMenu() { menu.hidden = true; btnMenu.setAttribute("aria-expanded", "false"); }
+  btnMenu.addEventListener("click", function (e) {
+    e.stopPropagation();
+    menu.hidden = !menu.hidden;
+    btnMenu.setAttribute("aria-expanded", menu.hidden ? "false" : "true");
+  });
+  menu.addEventListener("click", closeMenu);
+  document.addEventListener("click", function (e) { if (!menu.hidden && !menu.contains(e.target)) closeMenu(); });
+
+  $("#btnUndo").addEventListener("click", undo);
+  $("#btnRedo").addEventListener("click", redo);
+  function resetHistory() { clearTimeout(histTimer); histTimer = null; hist = [JSON.stringify(cfg)]; hi = 0; updateHistUI(); }
+
+  document.addEventListener("keydown", function (e) {
+    var mod = e.ctrlKey || e.metaKey;
+    if (!mod) return;
+    var k = (e.key || "").toLowerCase();
+    if (k === "k") { e.preventDefault(); searchEl.focus(); searchEl.select(); return; }
+    var tag = (e.target.tagName || "").toLowerCase();
+    var typing = tag === "input" || tag === "textarea" || tag === "select" || e.target.isContentEditable;
+    if (typing) return;
+    if (k === "z") { e.preventDefault(); if (e.shiftKey) redo(); else undo(); }
+    else if (k === "y") { e.preventDefault(); redo(); }
   });
 
   /* ---------- export ---------- */
@@ -1045,6 +1457,23 @@
         out.assets[k] = ASSET_FILES[k].path;
       }
     });
+    // ikon / gambar lain yang berupa data URL (ikon sosial, label, isi More Info) -> jadikan file di assets/uploads/
+    var EXT = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif", "image/svg+xml": "svg" };
+    var seen = {}, n = 0;
+    (function walk(o) {
+      Object.keys(o).forEach(function (k) {
+        var v = o[k];
+        if (typeof v === "string" && /^data:image\//.test(v)) {
+          if (!seen[v]) {
+            var mime = v.slice(5, v.indexOf(";") > 0 ? v.indexOf(";") : v.indexOf(","));
+            n++;
+            seen[v] = "assets/uploads/img-" + (n < 10 ? "0" : "") + n + "." + (EXT[mime] || "png");
+            files.push({ path: seen[v], data: dataUrlToBytes(v) });
+          }
+          o[k] = seen[v];
+        } else if (v && typeof v === "object") walk(v);
+      });
+    })(out);
     return { cfg: out, files: files };
   }
 
@@ -1055,7 +1484,9 @@
   }
 
   function dataUrlToBytes(u) {
-    var b64 = u.split(",")[1], bin = atob(b64), arr = new Uint8Array(bin.length);
+    var comma = u.indexOf(","), meta = u.slice(0, comma), payload = u.slice(comma + 1);
+    if (meta.indexOf(";base64") === -1) return new TextEncoder().encode(decodeURIComponent(payload));
+    var bin = atob(payload), arr = new Uint8Array(bin.length);
     for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
     return arr;
   }
@@ -1146,7 +1577,7 @@
         var s = String(r.result);
         var obj = JSON.parse(s.slice(s.indexOf("{"), s.lastIndexOf("}") + 1));
         cfg = PC.merge(DEFAULTS, obj);
-        refresh(); buildPanel();
+        refresh(); rebuildPanel(); resetHistory();
         toast("Config diimpor");
       } catch (err) { toast("File tidak valid (harus JSON / config.js hasil export)"); }
     };
@@ -1158,7 +1589,7 @@
     if (!confirm("Kembalikan semua ke isi js/config.js dan hapus draft?")) return;
     PC.clearDraft();
     cfg = PC.clone(DEFAULTS);
-    refresh(); buildPanel();
+    refresh(); rebuildPanel(); resetHistory();
     setStatus("Draft dihapus.");
     toast("Direset");
   });
@@ -1168,4 +1599,5 @@
   PC.applyTheme(shell, cfg);
   PC.render(cardEl, cfg);
   PC.applyMeta(cfg);
+  updateHistUI();
 })();
